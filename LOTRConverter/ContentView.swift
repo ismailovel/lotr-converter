@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import TipKit
 
 struct ContentView: View {
     @State var showExchangeInfo = false
@@ -14,8 +15,13 @@ struct ContentView: View {
     @State var leftAmount = ""
     @State var rightAmount = ""
     
+    @FocusState var leftTyping
+    @FocusState var rightTyping
+    
     @State var leftCurrency: Currency = .silverPiece
     @State var rightCurrency: Currency = .goldPiece
+    
+    let currencyTip = CurrencyTip()
     
     var body: some View {
         ZStack {
@@ -50,10 +56,13 @@ struct ContentView: View {
                         .padding(.bottom, -5)
                         .onTapGesture {
                             showSelectCurrency.toggle()
+                            currencyTip.invalidate(reason: .actionPerformed)
                         }
+                        .popoverTip(currencyTip, arrowEdge: .bottom)
                         
                         TextField("Amount", text: $leftAmount)
                             .textFieldStyle(.roundedBorder)
+                            .focused($leftTyping)
                     }
                     
                     Image(systemName: "equal")
@@ -75,17 +84,20 @@ struct ContentView: View {
                         .padding(.bottom, -5)
                         .onTapGesture {
                             showSelectCurrency.toggle()
+                            currencyTip.invalidate(reason: .actionPerformed)
                         }
                         
                         TextField("Amount", text: $rightAmount)
                             .textFieldStyle(.roundedBorder)
                             .multilineTextAlignment(.trailing)
+                            .focused($rightTyping)
                     }
                 }
                 .padding()
                 .padding(.horizontal)
                 .background(.black.opacity(0.5))
                 .clipShape(.capsule)
+                .keyboardType(.decimalPad)
                 
                 Spacer()
                 
@@ -94,20 +106,45 @@ struct ContentView: View {
                     
                     Button {
                         showExchangeInfo.toggle()
+                        leftTyping = false
+                        rightTyping = false
                     } label: {
                         Image(systemName: "info.circle.fill")
                             .font(.largeTitle)
                             .foregroundStyle(.white)
                     }
                     .padding(.trailing)
-                    .sheet(isPresented: $showExchangeInfo) {
-                        ExchangeInfo()
-                    }
-                    .sheet(isPresented: $showSelectCurrency) {
-                        SelectCurrency(topCurrency: $leftCurrency, bottomCurrency: $rightCurrency)
-                    }
                 }
             }
+        }
+        .task {
+            try? Tips.configure()
+        }
+        .onTapGesture {
+            leftTyping = false
+            rightTyping = false
+        }
+        .onChange(of: leftAmount) { oldValue, newValue in
+            if leftTyping {
+                rightAmount = leftCurrency.convert(newValue, to: rightCurrency)
+            }
+        }
+        .onChange(of: rightAmount) { oldValue, newValue in
+            if rightTyping {
+                leftAmount = rightCurrency.convert(newValue, to: leftCurrency)
+            }
+        }
+        .onChange(of: leftCurrency) { _ , _ in
+            leftAmount = rightCurrency.convert(rightAmount, to: leftCurrency)
+        }
+        .onChange(of: rightCurrency) { _ , _ in
+            rightAmount = leftCurrency.convert(leftAmount, to: rightCurrency)
+        }
+        .sheet(isPresented: $showExchangeInfo) {
+            ExchangeInfo()
+        }
+        .sheet(isPresented: $showSelectCurrency) {
+            SelectCurrency(topCurrency: $leftCurrency, bottomCurrency: $rightCurrency)
         }
     }
 }
